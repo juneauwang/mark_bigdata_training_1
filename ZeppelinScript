@@ -1,0 +1,70 @@
+#Shell example:
+#1. Kerberos ticket creation 
+#2. List all kerberos tickets
+#3. List all yarn application ID
+#4. Kill specific application in Yarn
+#5. Copy specific file from local file system to HDFS
+#6. Cat file in HDFS
+
+
+%sh
+kinit -kt /home/MARKWANG/MARKWANG.headless.keytab MARKWANG/edge.analyt.bdp@ANALYT.BDP
+klist
+yarn application -list
+#yarn application -kill application_1541761374587_4249
+#hdfs dfs -copyFromLocal ~/touchfile /user/MARKWANG
+#hdfs dfs -cat touchfile
+
+
+#Data load using Scala. The Source file is like:
+#IBKR;BKG REQUEST CARRIER;BKG REQUEST CARRIER;I;Shipping Event;QE
+#TBKR;Booking Request to Carrier;Booking Request to Carrier;T;Traxon/CCS-Event (external);QF
+#IBKC;BKG CONFIRMED TO SHIPPER;BKG CONFIRMED TO SHIPPER;I;Shipping Event;OR
+#TBKC;BKG CONFIRMED TO SHIPPER;BKG CONFIRMED TO SHIPPER;T;Traxon/CCS-Event (external);OS
+#TDCR;DOCS RECEIVED;DOCS RECEIVED;T;Traxon/CCS-Event (external);GN
+#TERL;EMPTY CONT REL BY CARRIER;EMPTY CONT REL BY CARRIER;T;Traxon/CCS-Event (external);WA
+#IERL;EMPTY CONT REL BY CARRIER;EMPTY CONT REL AT ORIGIN TERMINAL;I;Shipping Event;WB
+#TDLS;DLV TO STEAMSHIP;DLV TO STEAMSHIP;T;Traxon/CCS-Event (external);JL
+#TERD;EST. RAIL DEPARTURE;EST. RAIL DEPARTURE;T;Traxon/CCS-Event (external);PG
+#IERD;EST. RAIL DEPARTURE;EST. RAIL DEPARTURE;I;Shipping Event;PI
+#
+#
+
+%livy2
+import org.apache.spark.sql.types._
+
+{
+    val schema = new StructType().add("I",StringType,true).add("just",StringType,true).add("wanna",StringType,true).add("try",StringType,true).add("that",StringType,true).add("thing",StringType,true);
+	#Specific schema names.
+    var df = spark.read.format("csv").option("header","false").option("delimiter",";").option("charset", "UTF-8").schema(schema).load("/tmp/Shipment_Events.txt");
+	#Format the source file 
+    df.write.mode("overwrite").format("orc").saveAsTable("markwang");
+	#Write source file and save data into Hive table. Using database "default"
+    val df1 = spark.sql("select * from markwang");
+    df1.show();
+	#Show all data
+}
+#Data load using Python. 
+#Much similar with Scala. 
+%pyspark
+from pyspark import SparkContext, SparkConf
+from pyspark.sql import SparkSession
+from pyspark.sql.types import StructType
+sc = SparkContext.getOrCreate()
+#get spark context created by YARN
+print sc.applicationId
+#get YARN application ID
+print sc.sparkUser()
+#get YARN application user
+struct= StructType().add("I","string", True).add("really","string", True).add("wanna","string", True).add("try","string", True).add("this","string", True)
+dataload = spark.read.load("/tmp/Shipment_Events.txt",format="csv",sep=";",shema=struct)
+dataload.write.mode("overwrite").format("parquet").saveAsTable("markwang");
+df = spark.sql("""select * from markwang""")
+df.createOrReplaceTempView("markwang")
+df.show()
+
+
+%pyspark
+df = spark.sql("""select * from markwang""")
+df.createOrReplaceTempView("markwang")
+df.cube("this").count().show()
